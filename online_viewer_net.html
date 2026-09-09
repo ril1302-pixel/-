@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>승무근무표 자동 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root {
+    --bg-main: #f4f6f8;
+    --bg-card: #ffffff;
+    --border-color: #d1d5db;
+    --sun-color: #d32f2f;
+    --sat-color: #1976d2;
+    --empty-bg: #f9fafb;
+    
+    /* 톤 다운된 색상 정의 */
+    --date-num-color: #757575;
+    --dia-no-color: #616161;
+    --train-color: #111111;
+    --status-off-color: #d84315;
+    
+    --on-bg: #ffe0b2;
+    --on-text: #bf360c;
+    --off-bg: #c8e6c9;
+    --off-text: #1b5e20;
+    --input-bg: #ffffff;
+    --input-text: #333333;
+  }
+
+  [data-theme="dark"] {
+    --bg-main: #121212;
+    --bg-card: #1e1e1e;
+    --border-color: #333333;
+    --sun-color: #e57373;
+    --sat-color: #64b5f6;
+    --empty-bg: #181818;
+    
+    /* 다크모드 톤 다운 색상 */
+    --date-num-color: #9e9e9e;
+    --dia-no-color: #bdbdbd;
+    --train-color: #ffffff;
+    --status-off-color: #ff8a65;
+    
+    --on-bg: #4e2c00;
+    --on-text: #ffb74d;
+    --off-bg: #143818;
+    --off-text: #81c784;
+    --input-bg: #2a2a2a;
+    --input-text: #e0e0e0;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--dia-no-color);
+    margin: 0;
+    padding: 20px;
+    transition: background-color 0.3s;
+  }
+  
+  /* 입력 폼 영역 */
+  .input-section {
+    max-width: 1080px;
+    margin: 0 auto 20px auto;
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .input-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .input-section h2 { margin: 0; font-size: 20px; }
+  
+  .mode-toggle-group {
+    display: flex;
+    gap: 10px;
+  }
+
+  .toggle-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--dia-no-color);
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .toggle-btn.active {
+    background-color: #2196F3;
+    color: #ffffff;
+    border-color: #2196F3;
+  }
+
+  textarea {
+    width: 100%;
+    height: 140px;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 13px;
+    resize: vertical;
+    background-color: var(--input-bg);
+    color: var(--input-text);
+  }
+  .btn-group {
+    margin-top: 12px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  button.action-btn {
+    padding: 10px 18px;
+    font-size: 15px;
+    font-weight: bold;
+    color: white;
+    background-color: #2196F3;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button.action-btn:hover { background-color: #1976D2; }
+  button.save-btn { background-color: #E91E63; }
+  button.save-btn:hover { background-color: #C2185B; }
+  button.print-btn { background-color: #4CAF50; }
+  button.print-btn:hover { background-color: #388E3C; }
+
+  /* 달력 영역 */
+  .calendar-container {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+  }
+
+  /* ----------------------------------------------------
+     세로모드: Galaxy S24+ 화면 비율 (19.5:9, 1080x2340 최적화)
+     ---------------------------------------------------- */
+  .calendar-wrapper {
+    width: 1080px;
+    min-height: 2200px; /* S24+ 세로비율에 꼭 맞게 아래위로 크게 확장 */
+    margin: 0 auto;
+    padding: 15px 15px 25px 15px;
+    background-color: var(--bg-card);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .title-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding: 0 4px;
+  }
+  .title-bar .title-text {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--date-num-color);
+    letter-spacing: -0.5px;
+  }
+  
+  table.calendar {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  table.calendar th {
+    font-size: 26px;
+    font-weight: 700;
+    padding: 10px 0;
+    border-bottom: 3px solid var(--border-color);
+    text-align: center;
+  }
+  table.calendar th.sun { color: var(--sun-color); }
+  table.calendar th.sat { color: var(--sat-color); }
+  
+  table.calendar td {
+    width: 14.28%;
+    height: 330px; /* 셀 높이를 330px로 높여 시인성 확보 */
+    border: 2px solid var(--border-color);
+    vertical-align: top;
+    padding: 8px 4px;
+    background-color: var(--bg-card);
+  }
+  table.calendar td.sun .date-num { color: var(--sun-color); }
+  table.calendar td.sat .date-num { color: var(--sat-color); }
+  
+  /* 헤더: 날짜와 다이아 번호 */
+  .cell-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+    padding: 0 2px;
+  }
+  .date-num {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--date-num-color);
+  }
+  .dia-no {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--dia-no-color);
+  }
+
+  /* 열번 2줄 표기 영역 */
+  .train-no-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 64px;
+    margin-bottom: 8px;
+  }
+  .train-no-line {
+    font-size: 26px; /* 선명하고 명확하게 시각화 */
+    font-weight: 800;
+    color: var(--train-color);
+    line-height: 1.25;
+    letter-spacing: -0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 최우선 요소: 극대화된 출/퇴근 시각 뱃지 */
+  .time-badge {
+    text-align: center;
+    font-size: 32px; /* 최고 강조 크기 */
+    font-weight: 900;
+    padding: 10px 0;
+    border-radius: 8px;
+    margin-top: 6px;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+  }
+  .time-on { background-color: var(--on-bg); color: var(--on-text); }
+  .time-off { background-color: var(--off-bg); color: var(--off-text); }
+
+  /* 휴무/비실동 등 상태 텍스트 */
+  .status-text {
+    text-align: center;
+    font-size: 38px;
+    font-weight: 800;
+    margin-top: 80px;
+  }
+  .status-s { color: var(--date-num-color); }
+  .status-non-working { color: #00796b; }
+  .status-off { color: var(--status-off-color); }
+
+  .empty-cell { background-color: var(--empty-bg); }
+
+  /* ----------------------------------------------------
+     가로모드 전용 스타일
+     ---------------------------------------------------- */
+  .calendar-wrapper.landscape {
+    width: 1920px;
+    min-height: 1080px;
+    padding: 15px 30px;
+  }
+  .calendar-wrapper.landscape table.calendar td {
+    height: 160px;
+    padding: 6px 8px;
+  }
+  .calendar-wrapper.landscape .train-no-container {
+    min-height: auto;
+    flex-direction: row;
+    gap: 8px;
+  }
+  .calendar-wrapper.landscape .train-no-line {
+    font-size: 24px;
+  }
+  .calendar-wrapper.landscape .time-badge {
+    font-size: 28px;
+    padding: 4px 0;
+  }
+  .calendar-wrapper.landscape .status-text {
+    font-size: 36px;
+    margin-top: 30px;
+  }
+
+  @media print {
+    .input-section { display: none; }
+    body { padding: 0; background-color: transparent; }
+    .calendar-wrapper { box-shadow: none; width: 100% !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="input-section">
+  <div class="input-header">
+    <h2>근무 데이터 입력</h2>
+    <div class="mode-toggle-group">
+      <button class="toggle-btn" id="orientBtn" onclick="toggleOrientation()">
+        <span>↔️</span> <span id="orientText">가로모드 전환</span>
+      </button>
+      <button class="toggle-btn" onclick="toggleTheme()">
+        <span id="themeIcon">🌙</span> <span id="themeText">다크모드</span>
+      </button>
+    </div>
+  </div>
+  <textarea id="rawInput" placeholder="복사한 텍스트 데이터를 그대로 붙여넣으세요."></textarea>
+  <div class="btn-group">
+    <button class="action-btn" onclick="parseAndGenerate()">달력 생성하기</button>
+    <button class="action-btn save-btn" onclick="saveAsImage()">이미지 저장 (PNG)</button>
+    <button class="action-btn print-btn" onclick="window.print()">PDF/인쇄 저장</button>
+  </div>
+</div>
+
+<div class="calendar-container">
+  <div class="calendar-wrapper" id="calendarCapture">
+    <div class="title-bar">
+      <span class="title-text" id="calendarTitle">2026년 08월 승무근무표</span>
+    </div>
+    <table class="calendar">
+      <thead>
+        <tr>
+          <th class="sun">일</th>
+          <th>월</th>
+          <th>화</th>
+          <th>수</th>
+          <th>목</th>
+          <th>금</th>
+          <th class="sat">토</th>
+        </tr>
+      </thead>
+      <tbody id="calendarBody">
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const defaultText = `사업일자\t다이아번호\t대표열번1\t대표열번2\t출근시각\t퇴근시각\t휴일여부
+2026.08.01\tS\t--\t--\t--\t--\tY
+2026.08.02\tS\t--\t--\t--\t--\tY
+2026.08.03\t*\t--\t--\t--\t--\tN
+2026.08.04\t*\t--\t--\t--\t--\tN
+2026.08.05\t*\t--\t--\t--\t--\tN
+2026.08.06\t*\t--\t--\t--\t--\tN
+2026.08.07\t*\t--\t--\t--\t--\tN
+2026.08.08\tS\t--\t--\t--\t--\tY
+2026.08.09\tS\t--\t--\t--\t--\tY
+2026.08.10\t*\t--\t--\t--\t--\tN
+2026.08.11\tS\t--\t--\t--\t--\tY
+2026.08.12\t*\t--\t--\t--\t--\tN
+2026.08.13\tX\t--\t--\t--\t--\tN
+2026.08.14\t54601\tL6601\t6602\t04:10\t13:27\tN
+2026.08.15\t54906\tL6601\t6602\t04:10\t13:27\tN
+2026.08.16\tS\t--\t--\t--\t--\tY
+2026.08.17\tS\t--\t--\t--\t--\tY
+2026.08.18\t54551\t6521\t6522\t07:51\t19:00\tN
+2026.08.19\t*\t--\t--\t--\t--\tN
+2026.08.20\tX\t--\t--\t--\t--\tN
+2026.08.21\t54551\t6521\t6522\t07:51\t19:00\tN
+2026.08.22\tS\t--\t--\t--\t--\tY
+2026.08.23\tS\t--\t--\t--\t--\tY
+2026.08.24\t*\t--\t--\t--\t--\tN
+2026.08.25\tX\t--\t--\t--\t--\tN
+2026.08.26\t54601\tL6601\t6602\t04:10\t13:27\tN
+2026.08.27\t54551\t6521\t6522\t07:51\t19:00\tN
+2026.08.28\tS\t--\t--\t--\t--\tY
+2026.08.29\tS\t--\t--\t--\t--\tY
+2026.08.30\t54903\t--\t--\t12:00\t22:00\tN
+2026.08.31\t54407\tL3412\tM3411\t15:00\t00:58\tN`;
+
+  document.getElementById('rawInput').value = defaultText;
+
+  function toggleOrientation() {
+    const wrapper = document.getElementById('calendarCapture');
+    const orientBtn = document.getElementById('orientBtn');
+    const orientText = document.getElementById('orientText');
+    
+    wrapper.classList.toggle('landscape');
+    const isLandscape = wrapper.classList.contains('landscape');
+
+    if (isLandscape) {
+      orientBtn.classList.add('active');
+      orientText.innerText = '세로모드 전환';
+    } else {
+      orientBtn.classList.remove('active');
+      orientText.innerText = '가로모드 전환';
+    }
+  }
+
+  function toggleTheme() {
+    const body = document.body;
+    const isDark = body.getAttribute('data-theme') === 'dark';
+    
+    if (isDark) {
+      body.removeAttribute('data-theme');
+      document.getElementById('themeIcon').innerText = '🌙';
+      document.getElementById('themeText').innerText = '다크모드';
+    } else {
+      body.setAttribute('data-theme', 'dark');
+      document.getElementById('themeIcon').innerText = '☀️';
+      document.getElementById('themeText').innerText = '라이트모드';
+    }
+  }
+
+  function parseAndGenerate() {
+    const text = document.getElementById('rawInput').value.trim();
+    if (!text) return;
+
+    const lines = text.split('\n');
+    const workMap = {};
+    let year = '', month = '';
+
+    lines.forEach(line => {
+      const dateMatch = line.match(/(\d{4})\.(\d{2})\.(\d{2})/);
+      if (dateMatch) {
+        year = dateMatch[1];
+        month = dateMatch[2];
+        const day = parseInt(dateMatch[3], 10);
+
+        const cleanLine = line.replace(dateMatch[0], '').trim();
+        const parts = cleanLine.split(/\s+/);
+        
+        const dia = parts[0] || '';
+        let train1 = parts[1] || '';
+        let train2 = parts[2] || '';
+        
+        if (train1.includes('--') || train1 === '-') train1 = '';
+        if (train2.includes('--') || train2 === '-') train2 = '';
+
+        let on = '', off = '';
+        const times = line.match(/\d{2}:\d{2}/g);
+        if (times && times.length >= 2) {
+          on = times[0];
+          off = times[1];
+        }
+
+        workMap[day] = { dia, train1, train2, on, off };
+      }
+    });
+
+    if (!year || !month) {
+      alert('날짜 형식을 찾을 수 없습니다. (예: 2026.08.01)');
+      return;
+    }
+
+    document.getElementById('calendarTitle').innerText = `${year}년 ${month}월 승무근무표`;
+
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10);
+    const firstDay = new Date(y, m - 1, 1).getDay();
+    const lastDate = new Date(y, m, 0).getDate();
+
+    const tbody = document.getElementById('calendarBody');
+    tbody.innerHTML = '';
+
+    let currentDay = 1;
+    let rowHTML = '';
+
+    for (let week = 0; week < 6; week++) {
+      if (currentDay > lastDate) break;
+
+      rowHTML += '<tr>';
+      for (let dow = 0; dow < 7; dow++) {
+        let tdClass = [];
+        if (dow === 0) tdClass.push('sun');
+        if (dow === 6) tdClass.push('sat');
+
+        if ((week === 0 && dow < firstDay) || currentDay > lastDate) {
+          tdClass.push('empty-cell');
+          rowHTML += `<td class="${tdClass.join(' ')}"></td>`;
+        } else {
+          const info = workMap[currentDay] || {};
+          const dia = info.dia || '';
+          
+          let cellContent = '';
+
+          if (dia === '*' || dia.includes('*')) {
+            cellContent = `
+              <div class="cell-header">
+                <span class="date-num">${currentDay}</span>
+              </div>
+              <div class="status-text status-non-working">비실동</div>`;
+          } else if (dia === 'S') {
+            cellContent = `
+              <div class="cell-header">
+                <span class="date-num">${currentDay}</span>
+              </div>
+              <div class="status-text status-s">S</div>`;
+          } else if (dia === 'X' || dia === '연차') {
+            cellContent = `
+              <div class="cell-header">
+                <span class="date-num">${currentDay}</span>
+              </div>
+              <div class="status-text status-off">${dia === 'X' ? 'X' : '연차'}</div>`;
+          } else if (dia) {
+            cellContent = `
+              <div class="cell-header">
+                <span class="date-num">${currentDay}</span>
+                <span class="dia-no">${dia}</span>
+              </div>`;
+
+            // 열번 2줄 표기 (대표열번1, 대표열번2 각각 줄바꿈)
+            cellContent += `<div class="train-no-container">`;
+            if (info.train1) cellContent += `<div class="train-no-line">${info.train1}</div>`;
+            if (info.train2) cellContent += `<div class="train-no-line">${info.train2}</div>`;
+            cellContent += `</div>`;
+
+            // 출/퇴근 시각 (폰트 32px의 최우선 극대화)
+            if (info.on) cellContent += `<div class="time-badge time-on">출 ${info.on}</div>`;
+            if (info.off) cellContent += `<div class="time-badge time-off">퇴 ${info.off}</div>`;
+          } else {
+            cellContent = `
+              <div class="cell-header">
+                <span class="date-num">${currentDay}</span>
+              </div>`;
+          }
+
+          rowHTML += `<td class="${tdClass.join(' ')}">${cellContent}</td>`;
+          currentDay++;
+        }
+      }
+      rowHTML += '</tr>';
+    }
+
+    tbody.innerHTML = rowHTML;
+  }
+
+  function saveAsImage() {
+    const target = document.getElementById('calendarCapture');
+    const titleText = document.getElementById('calendarTitle').innerText;
+    const isLandscape = target.classList.contains('landscape');
+
+    html2canvas(target, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: getComputedStyle(document.body).getPropertyValue('--bg-card')
+    }).then(canvas => {
+      const link = document.createElement('a');
+      const modeSuffix = isLandscape ? '_가로모드' : '_세로모드';
+      link.download = `${titleText}${modeSuffix}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  }
+
+  window.onload = parseAndGenerate;
+</script>
+
+</body>
+</html>
